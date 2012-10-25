@@ -1,4 +1,4 @@
-(defproject zmq-anew3l "0.1.0"
+(defproject zmq-anew3l "0.1.1-SNAPSHOT"
   :description "ZMQ consumer enhancer for 3 Language ANEW"
   :url ""
   :license {:name ""

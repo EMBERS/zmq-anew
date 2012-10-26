@@ -1,5 +1,5 @@
 (ns zmq-anew3l.core
-;;  (:gen-class)
+  (:gen-class)
   (:require [zmq-anew3l.zmqex.zhelper :as mq]
             [clojure.string           :as s]
             [clojure.java.io          :as io]
@@ -84,16 +84,16 @@
     ;; sig-KILL is next.
     (loop [item (mq/recv-str subscriber)]
       (do
-        (let [jmsg     (json/parse-string item true)
-              text     (reduce get jmsg text-field)
-              anew-b   (anew-fn text)]
-          (when anew-b
-            (let [linemessage (json/generate-string (assoc jmsg :anew anew-b))]
-              (swap! message-count inc)
-              (mq/send publisher linemessage)
-              (when (== 0 (rem @message-count *count-log-interval*))
-                (log/info (str @message-count
-                               " messages emitted with ANEW agumentation"))))))
+        (let [jmsg        (json/parse-string item true)
+              text        (reduce get jmsg text-field)
+              anew-b      (anew-fn text)
+              jdsrc       (if anew-b (assoc jmsg :anew anew-b) jmsg)
+              linemessage (json/generate-string jdsrc)]
+          (swap! message-count inc)
+          (mq/send publisher linemessage)
+          (when (== 0 (rem @message-count *count-log-interval*))
+            (log/info (str @message-count
+                           " messages emitted."))))
         (recur (mq/recv-str subscriber))))))
 
 

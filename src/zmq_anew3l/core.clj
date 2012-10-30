@@ -17,7 +17,7 @@
 (def message-count (atom (long 0)))
 (def ^:dynamic *count-log-interval* 500)
 
-(defn queue-address [host port] (str "tcp://" host ":" port))
+;;(defn queue-address [host port] (str "tcp://" host ":" port))
 
 (defn gen-all 
   "Takes a JSON (Clojure) input, and produces JSON (Clojure) output.
@@ -69,14 +69,14 @@
 (defn score-stream
   "Very basic ZMQ synchronous subscription based ANEW scoring
    function."
-  [host port pport anew-fn text-field]
+  [pub sub anew-fn text-field]
   (let [ctx        (mq/context 1)
         subscriber (mq/socket ctx mq/sub)
         publisher  (mq/socket ctx mq/pub)]
     ;; Bind the publisher
-    (mq/bind publisher (queue-address "*" pport))
+    (mq/bind publisher pub)
     ;; Connect the subscriber
-    (mq/connect subscriber (queue-address host port))
+    (mq/connect subscriber sub)
     (mq/subscribe subscriber "")
     (mq/recv subscriber)
 
@@ -132,17 +132,15 @@
   (let [[opts args banner]
         (cli/cli args
                  ["-lexicon" "ANEW lexicon CSV (overrides packaged dependency)"]
-                 ["-host"    "ZMQ Raw/Twitter Host"
-                  :default "localhost"]
-                 ["-port"    "ZMQ Raw/Twitter Port"
-                  :default "30104"]
-                 ["-pport"   "ZMQ Publishing Port"
-                  :default "31338"]
+		 ["-pub"     "ZMQ output queue specification"
+		  :default "tcp://*:31338"]
+		 ["-sub"     "ZMQ input queue specification"
+		  :default "tcp://localhost:30104"]
                  ["-fn" "The scoring function one of 'bo3', 'all'"
                   :default :bo3
                   :parse-fn #(keyword %)]
                  ["-clog" "The message count logging interval"
-                  :default 500 
+                  :default 1000
                   :parse-fn wc/parse-number]
                  ["-field" "The JSON field to obtain text to score."
                   :default [:twitter :text]
@@ -167,5 +165,5 @@
 
     ;; This is a "loop forever" process ...
     (log/info "Starting stream score.")
-    (score-stream (:host opts) (:port opts) (:pport opts)
+    (score-stream (:pub opts) (:sub opts)
                   ((:fn opts) anew-fns) (:field opts))))

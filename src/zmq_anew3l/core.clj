@@ -17,8 +17,6 @@
 (def message-count (atom (long 0)))
 (def ^:dynamic *count-log-interval* 500)
 
-;;(defn queue-address [host port] (str "tcp://" host ":" port))
-
 (defn gen-all 
   "Takes a JSON (Clojure) input, and produces JSON (Clojure) output.
 
@@ -34,13 +32,13 @@
                       :a 4.210000038146973}}}"
   [text]
   (when text
-    (let [anew-en (anew/score-phrase text :english)
-          anew-es (anew/score-phrase text :spanish)
-          anew-pt (anew/score-phrase text :portuguese)]
+    (let [anew-en (anew/score-phrase (anew/string-or-seq text) :english)
+          anew-es (anew/score-phrase (anew/string-or-seq text) :spanish)
+          anew-pt (anew/score-phrase (anew/string-or-seq text) :portuguese)]
       (when-let [fin (filter (fn [x] (not (empty? (:words (second x)))))
-                             {:anew-en anew-en
-                              :anew-es anew-es
-                              :anew-pt anew-pt})]
+                             {:eng anew-en
+                              :spa anew-es
+                              :por anew-pt})]
         (if (not (empty? fin)) (into {} fin))))))
 
 (defn gen-best-of3
@@ -137,7 +135,7 @@
 		 ["-sub"     "ZMQ input queue specification"
 		  :default "tcp://localhost:30104"]
                  ["-fn" "The scoring function one of 'bo3', 'all'"
-                  :default :bo3
+                  :default :all
                   :parse-fn #(keyword %)]
                  ["-clog" "The message count logging interval"
                   :default 1000

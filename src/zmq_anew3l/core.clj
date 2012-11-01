@@ -63,6 +63,36 @@
 ;; a command line param / lookup.
 (def anew-fns {:bo3 gen-best-of3 :all gen-all})
 
+(defn get-value 
+  "Get the value of an expression using path.  The datum can be a map
+  or an iterable thing. E.g. t is
+  {:tweet 
+     {:items [
+              {:value \"a\"} 
+              {:value \"b\"} 
+              {:value \"c\"} 
+              {:value \"d\"} 
+             ]
+     }
+     :thing \"a thing\"
+  }
+  (get-value t [:tweet :items :value]) 
+     -> (\"a\" \"b\" \"c\" \"d\")
+  (get-value t [:tweet :thing])
+     -> \"a thing\" 
+  This is a more general version of (reduce get datum path) that copes 
+  with sequences/vectors.
+  "
+  [datum path]
+  (reduce (fn [d k]
+            (cond (map? d) 
+                  (get d k)
+                  (or (seq? d) (vector? d)) 
+                  (map #(get % k) d)
+                  true
+                  d))
+          datum path))
+
 
 (defn score-stream
   "Very basic ZMQ synchronous subscription based ANEW scoring
@@ -83,7 +113,7 @@
     (loop [item (mq/recv-str subscriber)]
       (do
         (let [jmsg        (json/parse-string item true)
-              text        (reduce get jmsg text-field)
+              text        (get-value jmsg text-field)
               anew-b      (anew-fn text)
               jdsrc       (if anew-b (assoc jmsg :anew anew-b) jmsg)
               linemessage (json/generate-string jdsrc)]
@@ -160,6 +190,10 @@
     (anew/load-lexicon
      (or (:lexicon opts)
          (io/resource anew-resource-file)))
+
+    (log/debug (format "starting with pub=%s sub=%s fn=%s field=%s" 
+                       (:pub opts) (:sub opts)
+                       (:fn opts) (vec (:field opts))))
 
     ;; This is a "loop forever" process ...
     (log/info "Starting stream score.")

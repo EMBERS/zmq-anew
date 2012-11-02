@@ -110,19 +110,25 @@
 
     ;; Right now, this loops forever. Hooking up response to CTRL-C /
     ;; sig-KILL is next.
-    (loop [item (mq/recv-str subscriber)]
-      (do
-        (let [jmsg        (json/parse-string item true)
-              text        (get-value jmsg text-field)
-              anew-b      (anew-fn text)
-              jdsrc       (if anew-b (assoc jmsg :anew anew-b) jmsg)
-              linemessage (json/generate-string jdsrc)]
-          (swap! message-count inc)
-          (mq/send publisher linemessage)
-          (when (== 0 (rem @message-count *count-log-interval*))
-            (log/info (str @message-count
-                           " messages emitted."))))
-        (recur (mq/recv-str subscriber))))))
+    (let [outs (java.io.PrintStream. System/out true "UTF-8")]
+      (loop [item (mq/recv-str subscriber)]
+        (do
+          (try
+            (let [jmsg        (json/parse-string item true)
+                  text        (get-value jmsg text-field)
+                  anew-b      (anew-fn text)
+                  jdsrc       (if anew-b (assoc jmsg :anew anew-b) jmsg)
+                  linemessage (json/generate-string jdsrc)]
+              (if jmsg ;; exception evals this block
+                (do
+                  (swap! message-count inc)
+                  (mq/send publisher linemessage)
+                  (. outs println linemessage)
+                  (when (== 0 (rem @message-count *count-log-interval*))
+                    (log/debug (str @message-count
+                                    " messages emitted."))))))
+            (catch Exception e (log/error e)))
+          (recur (mq/recv-str subscriber)))))))
 
 
 (defn parse-field

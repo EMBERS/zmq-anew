@@ -8,7 +8,7 @@
                  [org.clojure/tools.logging "0.2.3"]
                  [org.slf4j/slf4j-log4j12 "1.6.4"]
                  [cheshire "4.0.2"]
-                 [sentimental "0.1.1"]
+                 [sentimental "0.1.2-SNAPSHOT"]
                  [sentimental-data "0.1.0"]
                  [wujuko-common "0.1.1"]
                  [org.zeromq/jzmq "1.1.0-SNAPSHOT"]]

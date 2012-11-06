@@ -1,4 +1,4 @@
-(defproject zmq-anew3l "0.1.0"
+(defproject zmq-anew3l "0.1.1"
   :description "ZMQ consumer enhancer for 3 Language ANEW"
   :url ""
   :license {:name ""
@@ -8,9 +8,9 @@
                  [org.clojure/tools.logging "0.2.3"]
                  [org.slf4j/slf4j-log4j12 "1.6.4"]
                  [cheshire "4.0.2"]
-                 [sentimental "0.1.1"]
+                 [sentimental "0.1.2"]
                  [sentimental-data "0.1.0"]
-                 [wujuko-common "0.1.1"]
+                 [wujuko-common "0.1.2"]
                  [org.zeromq/jzmq "1.1.0-SNAPSHOT"]]
   :aliases {"zmqanew" ["trampoline" "run" "zmq-anew3l.core"]}
   :main zmq-anew3l.core

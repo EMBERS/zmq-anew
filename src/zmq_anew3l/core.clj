@@ -1,5 +1,5 @@
 (ns zmq-anew3l.core
-;;  (:gen-class)
+  (:gen-class)
   (:require [zmq-anew3l.zmqex.zhelper :as mq]
             [clojure.string           :as s]
             [clojure.java.io          :as io]
@@ -17,8 +17,6 @@
 (def message-count (atom (long 0)))
 (def ^:dynamic *count-log-interval* 500)
 
-(defn queue-address [host port] (str "tcp://" host ":" port))
-
 (defn gen-all 
   "Takes a JSON (Clojure) input, and produces JSON (Clojure) output.
 
@@ -34,13 +32,13 @@
                       :a 4.210000038146973}}}"
   [text]
   (when text
-    (let [anew-en (anew/score-phrase text :english)
-          anew-es (anew/score-phrase text :spanish)
-          anew-pt (anew/score-phrase text :portuguese)]
+    (let [anew-en (anew/score-phrase (anew/string-or-seq text) :english)
+          anew-es (anew/score-phrase (anew/string-or-seq text) :spanish)
+          anew-pt (anew/score-phrase (anew/string-or-seq text) :portuguese)]
       (when-let [fin (filter (fn [x] (not (empty? (:words (second x)))))
-                             {:anew-en anew-en
-                              :anew-es anew-es
-                              :anew-pt anew-pt})]
+                             {:eng anew-en
+                              :spa anew-es
+                              :por anew-pt})]
         (if (not (empty? fin)) (into {} fin))))))
 
 (defn gen-best-of3
@@ -65,36 +63,72 @@
 ;; a command line param / lookup.
 (def anew-fns {:bo3 gen-best-of3 :all gen-all})
 
+(defn get-value 
+  "Get the value of an expression using path.  The datum can be a map
+  or an iterable thing. E.g. t is
+  {:tweet 
+     {:items [
+              {:value \"a\"} 
+              {:value \"b\"} 
+              {:value \"c\"} 
+              {:value \"d\"} 
+             ]
+     }
+     :thing \"a thing\"
+  }
+  (get-value t [:tweet :items :value]) 
+     -> (\"a\" \"b\" \"c\" \"d\")
+  (get-value t [:tweet :thing])
+     -> \"a thing\" 
+  This is a more general version of (reduce get datum path) that copes 
+  with sequences/vectors.
+  "
+  [datum path]
+  (reduce (fn [d k]
+            (cond (map? d) 
+                  (get d k)
+                  (or (seq? d) (vector? d)) 
+                  (map #(get % k) d)
+                  true
+                  d))
+          datum path))
+
 
 (defn score-stream
   "Very basic ZMQ synchronous subscription based ANEW scoring
    function."
-  [host port pport anew-fn text-field]
+  [pub sub anew-fn text-field]
   (let [ctx        (mq/context 1)
         subscriber (mq/socket ctx mq/sub)
         publisher  (mq/socket ctx mq/pub)]
     ;; Bind the publisher
-    (mq/bind publisher (queue-address "*" pport))
+    (mq/bind publisher pub)
     ;; Connect the subscriber
-    (mq/connect subscriber (queue-address host port))
+    (mq/connect subscriber sub)
     (mq/subscribe subscriber "")
     (mq/recv subscriber)
 
     ;; Right now, this loops forever. Hooking up response to CTRL-C /
     ;; sig-KILL is next.
-    (loop [item (mq/recv-str subscriber)]
-      (do
-        (let [jmsg     (json/parse-string item true)
-              text     (reduce get jmsg text-field)
-              anew-b   (anew-fn text)]
-          (when anew-b
-            (let [linemessage (json/generate-string (assoc jmsg :anew anew-b))]
-              (swap! message-count inc)
-              (mq/send publisher linemessage)
-              (when (== 0 (rem @message-count *count-log-interval*))
-                (log/info (str @message-count
-                               " messages emitted with ANEW agumentation"))))))
-        (recur (mq/recv-str subscriber))))))
+    (let [outs (java.io.PrintStream. System/out true "UTF-8")]
+      (loop [item (mq/recv-str subscriber)]
+        (do
+          (try
+            (let [jmsg        (json/parse-string item true)
+                  text        (get-value jmsg text-field)
+                  anew-b      (anew-fn text)
+                  jdsrc       (if anew-b (assoc jmsg :anew anew-b) jmsg)
+                  linemessage (json/generate-string jdsrc)]
+              (if jmsg ;; exception evals this block
+                (do
+                  (swap! message-count inc)
+                  (mq/send publisher linemessage)
+                  (. outs println linemessage)
+                  (when (== 0 (rem @message-count *count-log-interval*))
+                    (log/debug (str @message-count
+                                    " messages emitted."))))))
+            (catch Exception e (log/error e)))
+          (recur (mq/recv-str subscriber)))))))
 
 
 (defn parse-field
@@ -132,17 +166,15 @@
   (let [[opts args banner]
         (cli/cli args
                  ["-lexicon" "ANEW lexicon CSV (overrides packaged dependency)"]
-                 ["-host"    "ZMQ Raw/Twitter Host"
-                  :default "localhost"]
-                 ["-port"    "ZMQ Raw/Twitter Port"
-                  :default "30104"]
-                 ["-pport"   "ZMQ Publishing Port"
-                  :default "31338"]
+		 ["-pub"     "ZMQ output queue specification"
+		  :default "tcp://*:31338"]
+		 ["-sub"     "ZMQ input queue specification"
+		  :default "tcp://localhost:30104"]
                  ["-fn" "The scoring function one of 'bo3', 'all'"
-                  :default :bo3
+                  :default :all
                   :parse-fn #(keyword %)]
                  ["-clog" "The message count logging interval"
-                  :default 500 
+                  :default 1000
                   :parse-fn wc/parse-number]
                  ["-field" "The JSON field to obtain text to score."
                   :default [:twitter :text]
@@ -165,7 +197,11 @@
      (or (:lexicon opts)
          (io/resource anew-resource-file)))
 
+    (log/debug (format "starting with pub=%s sub=%s fn=%s field=%s" 
+                       (:pub opts) (:sub opts)
+                       (:fn opts) (vec (:field opts))))
+
     ;; This is a "loop forever" process ...
     (log/info "Starting stream score.")
-    (score-stream (:host opts) (:port opts) (:pport opts)
+    (score-stream (:pub opts) (:sub opts)
                   ((:fn opts) anew-fns) (:field opts))))

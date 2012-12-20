@@ -117,7 +117,10 @@
             (let [jmsg        (json/parse-string item true)
                   text        (get-value jmsg text-field)
                   anew-b      (anew-fn text)
-                  jdsrc       (if anew-b (assoc jmsg :anew anew-b) jmsg)
+                  jdsrc       (if anew-b (assoc jmsg 
+                                           :anew anew-b
+                                           :feed "ANEW") 
+                                  jmsg)
                   linemessage (json/generate-string jdsrc)]
               (if jmsg ;; exception evals this block
                 (do

@@ -86,7 +86,7 @@
 
 (defmethod send String
   ([#^ZMQ$Socket socket #^String message flags]
-     (.send socket (.getBytes message) flags))
+     (.send socket (.getBytes message "UTF8") flags))
   ([#^ZMQ$Socket socket #^String message]
      (send socket message ZMQ/NOBLOCK)))
 

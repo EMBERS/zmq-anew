@@ -112,7 +112,7 @@
         (conj acc msg)))))
 
 (defn recv-str [#^ZMQ$Socket socket]
-  (-> socket recv String. .trim))
+  (.trim (String. (recv socket) "UTF8")))
 
 (defn dump
   [#^ZMQ$Socket socket]

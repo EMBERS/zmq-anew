@@ -7,7 +7,8 @@
             [clojure.tools.cli        :as cli]
             [clojure.tools.logging    :as log]
             [wujuko-common.core       :as wc]
-            [sentimental.anew         :as anew]))
+            [sentimental.anew         :as anew])
+  (:import  [edu.embers.etool QueueConf]))
 
 ;; This is a resource packaged in the sentimental-data dependency.
 ;; The ANEW resource can be overridden on the command line.
@@ -182,7 +183,11 @@
                  ["-field" "The JSON field to obtain text to score."
                   :default [:twitter :text]
                   :parse-fn parse-field]
-                 ["-z" "--help" "Show help." :flag true])]
+                 ["-z" "--help" "Show help." :flag true]
+                 ["-qconf" "Queue configuration file."])
+        qconf (QueueConf/locate (:qconf opts))
+        pub   (.getBindUrl qconf (:pub opts))
+        sub   (.getConnectUrl qconf (:sub opts))]
 
     ;; If the required options are not present from the command line
     ;; print the banner and exit.
@@ -200,11 +205,11 @@
      (or (:lexicon opts)
          (io/resource anew-resource-file)))
 
-    (log/debug (format "starting with pub=%s sub=%s fn=%s field=%s" 
-                       (:pub opts) (:sub opts)
+    (log/info (format "starting with pub=%s sub=%s fn=%s field=%s" 
+                       pub sub
                        (:fn opts) (vec (:field opts))))
 
     ;; This is a "loop forever" process ...
     (log/info "Starting stream score.")
-    (score-stream (:pub opts) (:sub opts)
+    (score-stream pub sub
                   ((:fn opts) anew-fns) (:field opts))))

@@ -11,7 +11,8 @@
                  [sentimental "0.1.2"]
                  [sentimental-data "0.1.0"]
                  [wujuko-common "0.1.2"]
-                 [org.zeromq/jzmq "1.1.0-SNAPSHOT"]]
+                 [org.zeromq/jzmq "1.1.0-SNAPSHOT"]
+                 [edu.embers.etool/jetool "1.0-SNAPSHOT"]]
   :aliases {"zmqanew" ["trampoline" "run" "zmq-anew3l.core"]}
   :main zmq-anew3l.core
   ;; Note this must match on all systems installed...

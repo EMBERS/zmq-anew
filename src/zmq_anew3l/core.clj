@@ -121,7 +121,8 @@
                   jdsrc       (if anew-b (assoc jmsg 
                                            :anew anew-b
                                            :feed "ANEW") 
-                                  jmsg)
+                                  (assoc jmsg
+                                    :feed "ANEW"))
                   linemessage (json/generate-string jdsrc)]
               (if jmsg ;; exception evals this block
                 (do

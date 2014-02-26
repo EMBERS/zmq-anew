@@ -120,9 +120,9 @@
                   anew-b      (anew-fn text)
                   jdsrc       (if anew-b (assoc jmsg 
                                            :anew anew-b
-                                           :feed "ANEW") 
+                                           :feed pub) 
                                   (assoc jmsg
-                                    :feed "ANEW"))
+                                    :feed pub))
                   linemessage (json/generate-string jdsrc)]
               (if jmsg ;; exception evals this block
                 (do

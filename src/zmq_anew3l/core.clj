@@ -98,7 +98,7 @@
 (defn score-stream
   "Very basic ZMQ synchronous subscription based ANEW scoring
    function."
-  [pub sub anew-fn text-field]
+  [pub sub anew-fn text-field feed-name]
   (let [ctx        (mq/context 1)
         subscriber (mq/socket ctx mq/sub)
         publisher  (mq/socket ctx mq/pub)]
@@ -120,9 +120,9 @@
                   anew-b      (anew-fn text)
                   jdsrc       (if anew-b (assoc jmsg 
                                            :anew anew-b
-                                           :feed pub) 
+                                           :feed feed-name) 
                                   (assoc jmsg
-                                    :feed pub))
+                                    :feed feed-name))
                   linemessage (json/generate-string jdsrc)]
               (if jmsg ;; exception evals this block
                 (do
@@ -213,4 +213,4 @@
     ;; This is a "loop forever" process ...
     (log/info "Starting stream score.")
     (score-stream pub sub
-                  ((:fn opts) anew-fns) (:field opts))))
+                  ((:fn opts) anew-fns) (:field opts) (:pub opts))))

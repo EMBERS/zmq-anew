@@ -1,14 +1,14 @@
 (ns zmq-anew3l.core
   (:gen-class)
-  (:require [zmq-anew3l.zmqex.zhelper :as mq]
-            [clojure.string           :as s]
+  (:require [clojure.string           :as s]
             [clojure.java.io          :as io]
             [cheshire.core            :as json]
             [clojure.tools.cli        :as cli]
             [clojure.tools.logging    :as log]
             [wujuko-common.core       :as wc]
             [sentimental.anew         :as anew])
-  (:import  [edu.embers.etool QueueConf]))
+  (:import  [edu.embers.etool QueueConf Queue]
+  	    [org.zeromq ZMQ]))
 
 ;; This is a resource packaged in the sentimental-data dependency.
 ;; The ANEW resource can be overridden on the command line.
@@ -99,41 +99,32 @@
   "Very basic ZMQ synchronous subscription based ANEW scoring
    function."
   [pub sub anew-fn text-field feed-name]
-  (let [ctx        (mq/context 1)
-        subscriber (mq/socket ctx mq/sub)
-        publisher  (mq/socket ctx mq/pub)]
-    ;; Bind the publisher
-    (mq/bind publisher pub)
-    ;; Connect the subscriber
-    (mq/connect subscriber sub)
-    (mq/subscribe subscriber "")
-    (mq/recv subscriber)
-
     ;; Right now, this loops forever. Hooking up response to CTRL-C /
     ;; sig-KILL is next.
-    (let [outs (java.io.PrintStream. System/out true "UTF-8")]
-      (loop [item (mq/recv-str subscriber)]
+    ;; old, save for debugging (let [outs (java.io.PrintStream. System/out true "UTF-8")]
+  (loop [item (.read sub)] 
         (do
-          (try
-            (let [jmsg        (json/parse-string item true)
-                  text        (get-value jmsg text-field)
-                  anew-b      (anew-fn text)
-                  jdsrc       (if anew-b (assoc jmsg 
-                                           :anew anew-b
-                                           :feed feed-name) 
-                                  (assoc jmsg
+	 (try
+	  (let [jmsg        (json/parse-string item true)
+	       text        (get-value jmsg text-field)
+	       anew-b      (anew-fn text)
+	       jdsrc       (if anew-b 
+			       (assoc jmsg 
+				      :anew anew-b
+				      :feed feed-name) 
+			       (assoc jmsg
                                     :feed feed-name))
-                  linemessage (json/generate-string jdsrc)]
-              (if jmsg ;; exception evals this block
-                (do
-                  (swap! message-count inc)
-                  (mq/send publisher linemessage)
-                  (. outs println linemessage)
-                  (when (== 0 (rem @message-count *count-log-interval*))
-                    (log/debug (str @message-count
-                                    " messages emitted."))))))
-            (catch Exception e (log/error e)))
-          (recur (mq/recv-str subscriber)))))))
+	       linemessage (json/generate-string jdsrc)]
+	       (if jmsg ;; exception evals this block
+		   (do
+		    (swap! message-count inc)
+		    (.write pub linemessage)
+		    ;;(. outs println linemessage)
+		    (when (== 0 (rem @message-count *count-log-interval*))
+		      (log/debug (str @message-count
+				      " messages emitted."))))))
+	  (catch Exception e (log/error e)))
+          (recur (.read sub)))))
 
 
 (defn parse-field
@@ -172,9 +163,11 @@
         (cli/cli args
                  ["-lexicon" "ANEW lexicon CSV (overrides packaged dependency)"]
 		 ["-pub"     "ZMQ output queue specification"
-		  :default "tcp://*:31338"]
+		  :default nil]
 		 ["-sub"     "ZMQ input queue specification"
-		  :default "tcp://localhost:30104"]
+		  :default nil]
+		 ["-service"     "Service name"
+		  :default (.get (System/getenv) "UPSTART_JOB")]
                  ["-fn" "The scoring function one of 'bo3', 'all'"
                   :default :all
                   :parse-fn #(keyword %)]
@@ -185,10 +178,7 @@
                   :default [:twitter :text]
                   :parse-fn parse-field]
                  ["-z" "--help" "Show help." :flag true]
-                 ["-qconf" "Queue configuration file."])
-        qconf (QueueConf/locate (:qconf opts))
-        pub   (.getBindUrl qconf (:pub opts))
-        sub   (.getConnectUrl qconf (:sub opts))]
+                 ["-qconf" "Queue configuration file."])]
 
     ;; If the required options are not present from the command line
     ;; print the banner and exit.
@@ -206,11 +196,15 @@
      (or (:lexicon opts)
          (io/resource anew-resource-file)))
 
-    (log/info (format "starting with pub=%s sub=%s fn=%s field=%s" 
-                       pub sub
+    (log/info (format "starting with pub=%s sub=%s service=%s fn=%s field=%s" 
+                       (:pub opts) (:sub opts) (:service opts)
                        (:fn opts) (vec (:field opts))))
 
     ;; This is a "loop forever" process ...
-    (log/info "Starting stream score.")
-    (score-stream pub sub
-                  ((:fn opts) anew-fns) (:field opts) (:pub opts))))
+    (let [qconf (QueueConf/locate (:qconf opts))
+	 pub   (Queue/open (:pub opts) ZMQ/PUB (:service opts) qconf (.getClass ""))
+	 sub   (Queue/open (:sub opts) ZMQ/SUB (:service opts) qconf (.getClass ""))]
+
+	 (log/info "Starting stream score.")
+	 (score-stream pub sub
+		       ((:fn opts) anew-fns) (:field opts) (:service opts)))))
